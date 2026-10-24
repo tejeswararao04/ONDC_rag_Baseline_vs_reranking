@@ -133,8 +133,9 @@ chunks, index, bi, cross = load_all()
 
 if "q" not in st.session_state:
     st.session_state["q"] = SAMPLES[0]
-if "result" not in st.session_state:
-    st.session_state["result"] = None
+if "history" not in st.session_state:
+    # every answered question stays on screen like a chat thread
+    st.session_state["history"] = []
 
 
 def run_check(query):
@@ -174,55 +175,60 @@ for s in SAMPLES:
     if st.button(s, key=s):
         # one click fills the box AND runs both pipelines
         st.session_state["q"] = s
-        st.session_state["result"] = run_check(s)
+        st.session_state["history"].append(run_check(s))
 
-query = st.text_input(
-    "Ask if a buyer-app or seller-app feature is protocol-allowed:",
-    value=st.session_state["q"],
-)
+# textbox with the Check button right beside it, Enter also works
+with st.form("ask", clear_on_submit=False):
+    input_col, btn_col = st.columns([5, 1], vertical_alignment="bottom")
+    with input_col:
+        query = st.text_input(
+            "Ask if a buyer-app or seller-app feature is protocol-allowed:",
+            value=st.session_state["q"],
+            label_visibility="collapsed",
+            placeholder="Ask if a buyer-app or seller-app feature is protocol-allowed…",
+        )
+    with btn_col:
+        go = st.form_submit_button("Check", type="primary")
+    if go and query.strip():
+        st.session_state["q"] = query
+        st.session_state["history"].append(run_check(query))
 
-if st.button("✅ Check", type="primary") and query.strip():
-    st.session_state["q"] = query
-    st.session_state["result"] = run_check(query)
-
-res = st.session_state["result"]
-if res is not None:
-    col1, col2 = st.columns(2)
-    with col1:
+for res in st.session_state["history"]:
+    with st.chat_message("user"):
+        st.write(res["query"])
+    with st.chat_message("assistant"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(
+                '<span class="badge-base">PIPELINE 1 · BASELINE</span>',
+                unsafe_allow_html=True,
+            )
+            st.write(res["ans1"])
+            st.caption(f"Retrieval: {res['t_base']:.3f}s")
+        with col2:
+            st.markdown(
+                '<span class="badge-rerank">PIPELINE 2 · RE-RANKED</span>',
+                unsafe_allow_html=True,
+            )
+            st.write(res["ans2"])
+            st.caption(
+                f"Re-rank extra: {res['t_rerank']:.3f}s, "
+                f"total: {res['t_total']:.3f}s"
+            )
         st.markdown(
-            '<span class="badge-base">PIPELINE 1 · BASELINE</span>',
+            "".join(
+                f"<span class='shift-chip'>{c['id']} (p.{c['page']}): "
+                f"#{next(h['rank'] for h in res['hits'] if h['id'] == c['id'])} "
+                f"→ #{i + 1}</span>"
+                for i, c in enumerate(res["top3_new"])
+            ),
             unsafe_allow_html=True,
         )
-        st.subheader("Answer 1: baseline Top 3")
-        st.write(res["ans1"])
-        st.caption(f"Retrieval: {res['t_base']:.3f}s")
-    with col2:
-        st.markdown(
-            '<span class="badge-rerank">PIPELINE 2 · RE-RANKED ✓</span>',
-            unsafe_allow_html=True,
-        )
-        st.subheader("Answer 2: re-ranked Top 3")
-        st.write(res["ans2"])
-        st.caption(
-            f"Re-rank extra: {res['t_rerank']:.3f}s, "
-            f"total: {res['t_total']:.3f}s"
-        )
-
-    st.subheader("Rank shifts (old to new)")
-    st.markdown(
-        "".join(
-            f"<span class='shift-chip'>{c['id']} (p.{c['page']}): "
-            f"#{next(h['rank'] for h in res['hits'] if h['id'] == c['id'])} "
-            f"→ #{i + 1}</span>"
-            for i, c in enumerate(res["top3_new"])
-        ),
-        unsafe_allow_html=True,
-    )
-    with st.expander("Baseline Top 3 chunks"):
-        for h in res["top3_base"]:
-            st.markdown(f"**{h['id']}**, page {h['page']}")
-            st.text(h["text"][:800])
-    with st.expander("Re-ranked Top 3 chunks"):
-        for h in res["top3_new"]:
-            st.markdown(f"**{h['id']}**, page {h['page']}")
-            st.text(h["text"][:800])
+        with st.expander("Baseline Top 3 chunks"):
+            for h in res["top3_base"]:
+                st.markdown(f"**{h['id']}**, page {h['page']}")
+                st.text(h["text"][:800])
+        with st.expander("Re-ranked Top 3 chunks"):
+            for h in res["top3_new"]:
+                st.markdown(f"**{h['id']}**, page {h['page']}")
+                st.text(h["text"][:800])
