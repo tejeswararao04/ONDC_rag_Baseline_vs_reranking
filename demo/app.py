@@ -93,16 +93,14 @@ st.caption(
 
 chunks, index, bi, cross = load_all()
 
-for s in SAMPLES:
-    if st.button(s, key=s):
-        st.session_state["q"] = s
+if "q" not in st.session_state:
+    st.session_state["q"] = SAMPLES[0]
+if "result" not in st.session_state:
+    st.session_state["result"] = None
 
-query = st.text_input(
-    "Ask if a buyer-app or seller-app feature is protocol-allowed:",
-    value=st.session_state.get("q", SAMPLES[0]),
-)
 
-if st.button("Check") and query.strip():
+def run_check(query):
+    # runs both pipelines once, returns everything the UI shows
     t0 = time.time()
     hits = search_top10(query, chunks, index, bi)
     top3_base = hits[:3]
@@ -119,31 +117,65 @@ if st.button("Check") and query.strip():
     except Exception as e:
         ans2 = f"LLM call failed: {e}"
     t3 = time.time()
+    return {
+        "query": query,
+        "hits": hits,
+        "ranked": ranked,
+        "top3_base": top3_base,
+        "top3_new": top3_new,
+        "ans1": ans1,
+        "ans2": ans2,
+        "t_base": t1 - t0,
+        "t_rerank": t2 - t1,
+        "t_total": t3 - t0,
+    }
 
+
+st.write("Try a sample, or type your own question below:")
+for s in SAMPLES:
+    if st.button(s, key=s):
+        # one click fills the box AND runs both pipelines
+        st.session_state["q"] = s
+        st.session_state["result"] = run_check(s)
+
+query = st.text_input(
+    "Ask if a buyer-app or seller-app feature is protocol-allowed:",
+    value=st.session_state["q"],
+)
+
+if st.button("Check") and query.strip():
+    st.session_state["q"] = query
+    st.session_state["result"] = run_check(query)
+
+res = st.session_state["result"]
+if res is not None:
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Answer 1: baseline Top 3")
-        st.write(ans1)
-        st.caption(f"Retrieval: {t1 - t0:.3f}s")
+        st.write(res["ans1"])
+        st.caption(f"Retrieval: {res['t_base']:.3f}s")
     with col2:
         st.subheader("Answer 2: re-ranked Top 3")
-        st.write(ans2)
-        st.caption(f"Re-rank extra: {t2 - t1:.3f}s, total: {t3 - t0:.3f}s")
+        st.write(res["ans2"])
+        st.caption(
+            f"Re-rank extra: {res['t_rerank']:.3f}s, "
+            f"total: {res['t_total']:.3f}s"
+        )
 
     st.subheader("Rank shifts (old to new)")
     st.write(
         " | ".join(
             f"{c['id']} (p.{c['page']}): "
-            f"#{next(h['rank'] for h in hits if h['id'] == c['id'])} "
+            f"#{next(h['rank'] for h in res['hits'] if h['id'] == c['id'])} "
             f"to #{i + 1}"
-            for i, c in enumerate(top3_new)
+            for i, c in enumerate(res["top3_new"])
         )
     )
     with st.expander("Baseline Top 3 chunks"):
-        for h in top3_base:
+        for h in res["top3_base"]:
             st.markdown(f"**{h['id']}**, page {h['page']}")
             st.text(h["text"][:800])
     with st.expander("Re-ranked Top 3 chunks"):
-        for h in top3_new:
+        for h in res["top3_new"]:
             st.markdown(f"**{h['id']}**, page {h['page']}")
             st.text(h["text"][:800])
