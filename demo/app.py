@@ -224,11 +224,39 @@ for res in st.session_state["history"]:
             ),
             unsafe_allow_html=True,
         )
-        with st.expander("Baseline Top 3 chunks"):
-            for h in res["top3_base"]:
-                st.markdown(f"**{h['id']}**, page {h['page']}")
-                st.text(h["text"][:800])
-        with st.expander("Re-ranked Top 3 chunks"):
-            for h in res["top3_new"]:
-                st.markdown(f"**{h['id']}**, page {h['page']}")
+        # one organized source view: union of both Top 3s with old/new ranks
+        st.markdown("**Sources compared**")
+        union_ids = [c["id"] for c in res["top3_new"]]
+        for h in res["top3_base"]:
+            if h["id"] not in union_ids:
+                union_ids.append(h["id"])
+        base_ids = [h["id"] for h in res["top3_base"]]
+        new_ids = [h["id"] for h in res["top3_new"]]
+        table = []
+        for cid in union_ids:
+            old = next(h["rank"] for h in res["hits"] if h["id"] == cid)
+            new = next(
+                i + 1 for i, h in enumerate(res["ranked"]) if h["id"] == cid
+            )
+            page = next(h["page"] for h in res["hits"] if h["id"] == cid)
+            move = old - new
+            arrow = f"↑ {move}" if move > 0 else (f"↓ {-move}" if move < 0 else "=")
+            table.append(
+                {
+                    "Chunk": f"{cid} (p. {page})",
+                    "Baseline": "in Top 3" if cid in base_ids else f"rank {old}",
+                    "Re-ranked": "in Top 3" if cid in new_ids else f"rank {new}",
+                    "Move": arrow,
+                }
+            )
+        st.table(table)
+        with st.expander("Chunk texts"):
+            for cid in union_ids:
+                h = next(x for x in res["hits"] if x["id"] == cid)
+                tag = []
+                if cid in base_ids:
+                    tag.append("baseline")
+                if cid in new_ids:
+                    tag.append("re-ranked")
+                st.markdown(f"**{cid}**, page {h['page']} ({', '.join(tag)})")
                 st.text(h["text"][:800])
