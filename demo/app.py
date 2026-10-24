@@ -7,11 +7,15 @@ index.faiss were built once from ONDC_eB2B_Contract.pdf (328 chunks).
 """
 import pickle
 import time
+from pathlib import Path
 
 import faiss
 import numpy as np
 import streamlit as st
 from sentence_transformers import CrossEncoder, SentenceTransformer
+
+# files sit next to this script, so resolve against it, not the cwd
+BASE = Path(__file__).parent
 
 # fixed prompt used by both pipelines, only chunks differ
 PROMPT_HEAD = (
@@ -30,9 +34,9 @@ SAMPLES = [
 @st.cache_resource
 def load_all():
     # chunks, index and both models load once per session
-    with open("chunks.pkl", "rb") as f:
+    with open(BASE / "chunks.pkl", "rb") as f:
         chunks = pickle.load(f)
-    index = faiss.read_index("index.faiss")
+    index = faiss.read_index(str(BASE / "index.faiss"))
     bi = SentenceTransformer("all-MiniLM-L6-v2")
     cross = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
     return chunks, index, bi, cross
