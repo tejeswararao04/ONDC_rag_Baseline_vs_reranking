@@ -84,7 +84,45 @@ def answer(query, top3):
     return llm.generate_content(make_prompt(query, top3)).text
 
 
-st.set_page_config(page_title="ONDC Protocol Checker", layout="wide")
+st.set_page_config(
+    page_title="ONDC Protocol Checker", layout="wide", page_icon="✅"
+)
+st.markdown(
+    """
+    <style>
+    /* green Check button (primary buttons only, samples stay grey) */
+    div[data-testid="stButton"] button[kind="primary"] {
+        background-color: #16a34a;
+        border-color: #16a34a;
+        color: white;
+        font-weight: 600;
+    }
+    div[data-testid="stButton"] button[kind="primary"]:hover {
+        background-color: #15803d;
+        border-color: #15803d;
+        color: white;
+    }
+    /* color badges for the two pipelines */
+    .badge-base {
+        display: inline-block; padding: 2px 10px; border-radius: 999px;
+        background-color: #fef3c7; color: #92400e;
+        font-size: 13px; font-weight: 600;
+    }
+    .badge-rerank {
+        display: inline-block; padding: 2px 10px; border-radius: 999px;
+        background-color: #dcfce7; color: #166534;
+        font-size: 13px; font-weight: 600;
+    }
+    .shift-chip {
+        display: inline-block; padding: 2px 10px; border-radius: 8px;
+        background-color: #f1f5f9; color: #0f172a;
+        font-size: 13px; margin: 2px 4px 2px 0;
+        border: 1px solid #e2e8f0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 st.title("ONDC eB2B Protocol Checker")
 st.caption(
     "Baseline dense retrieval vs Cross-Encoder re-ranking over the ONDC eB2B "
@@ -143,7 +181,7 @@ query = st.text_input(
     value=st.session_state["q"],
 )
 
-if st.button("Check") and query.strip():
+if st.button("✅ Check", type="primary") and query.strip():
     st.session_state["q"] = query
     st.session_state["result"] = run_check(query)
 
@@ -151,10 +189,18 @@ res = st.session_state["result"]
 if res is not None:
     col1, col2 = st.columns(2)
     with col1:
+        st.markdown(
+            '<span class="badge-base">PIPELINE 1 · BASELINE</span>',
+            unsafe_allow_html=True,
+        )
         st.subheader("Answer 1: baseline Top 3")
         st.write(res["ans1"])
         st.caption(f"Retrieval: {res['t_base']:.3f}s")
     with col2:
+        st.markdown(
+            '<span class="badge-rerank">PIPELINE 2 · RE-RANKED ✓</span>',
+            unsafe_allow_html=True,
+        )
         st.subheader("Answer 2: re-ranked Top 3")
         st.write(res["ans2"])
         st.caption(
@@ -163,13 +209,14 @@ if res is not None:
         )
 
     st.subheader("Rank shifts (old to new)")
-    st.write(
-        " | ".join(
-            f"{c['id']} (p.{c['page']}): "
+    st.markdown(
+        "".join(
+            f"<span class='shift-chip'>{c['id']} (p.{c['page']}): "
             f"#{next(h['rank'] for h in res['hits'] if h['id'] == c['id'])} "
-            f"to #{i + 1}"
+            f"→ #{i + 1}</span>"
             for i, c in enumerate(res["top3_new"])
-        )
+        ),
+        unsafe_allow_html=True,
     )
     with st.expander("Baseline Top 3 chunks"):
         for h in res["top3_base"]:
