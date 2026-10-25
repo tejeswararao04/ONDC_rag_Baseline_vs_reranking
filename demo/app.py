@@ -131,9 +131,9 @@ chunks, index, bi, cross = load_all()
 
 if "q" not in st.session_state:
     st.session_state["q"] = SAMPLES[0]
-if "history" not in st.session_state:
-    # every answered question stays on screen like a chat thread
-    st.session_state["history"] = []
+if "res" not in st.session_state:
+    # only the latest answer is shown, a new question replaces the old one
+    st.session_state["res"] = None
 
 
 def run_check(query):
@@ -171,9 +171,9 @@ def run_check(query):
 st.write("Try a sample, or type your own question below:")
 for s in SAMPLES:
     if st.button(s, key=s):
-        # one click fills the box AND runs both pipelines
+        # one click fills the box AND runs both pipelines, replacing old answer
         st.session_state["q"] = s
-        st.session_state["history"].append(run_check(s))
+        st.session_state["res"] = run_check(s)
 
 # textbox with the Check button right beside it, Enter also works
 with st.form("ask", clear_on_submit=False):
@@ -189,9 +189,10 @@ with st.form("ask", clear_on_submit=False):
         go = st.form_submit_button("Check", type="primary")
     if go and query.strip():
         st.session_state["q"] = query
-        st.session_state["history"].append(run_check(query))
+        st.session_state["res"] = run_check(query)
 
-for res in st.session_state["history"]:
+res = st.session_state["res"]
+if res is not None:
     with st.chat_message("user"):
         st.write(res["query"])
     with st.chat_message("assistant"):
@@ -248,13 +249,13 @@ for res in st.session_state["history"]:
                 }
             )
         st.table(table)
+        # single compact box: all source texts comma-separated, scrolls inside
         with st.expander("Chunk texts"):
-            for cid in union_ids:
-                h = next(x for x in res["hits"] if x["id"] == cid)
-                tag = []
-                if cid in base_ids:
-                    tag.append("baseline")
-                if cid in new_ids:
-                    tag.append("re-ranked")
-                st.markdown(f"**{cid}**, page {h['page']} ({', '.join(tag)})")
-                st.text(h["text"][:800])
+            by_id = {x["id"]: x for x in res["hits"]}
+            st.text_area(
+                "Sources",
+                value=", ".join(by_id[cid]["text"][:800] for cid in union_ids),
+                height=150,
+                disabled=True,
+                key="chunkbox",
+            )
