@@ -84,9 +84,7 @@ def answer(query, top3):
     return llm.generate_content(make_prompt(query, top3)).text
 
 
-st.set_page_config(
-    page_title="ONDC Protocol Checker", layout="wide", page_icon="✅"
-)
+st.set_page_config(page_title="ONDC Protocol Checker", layout="wide")
 st.markdown(
     """
     <style>
